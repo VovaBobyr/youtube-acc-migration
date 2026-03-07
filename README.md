@@ -1,0 +1,368 @@
+YouTube Subscription Migrator
+=============================
+
+This is a Python 3.11+ CLI tool for migrating YouTube channel subscriptions from one personal Google account to another using the official YouTube Data API v3.
+
+The tool:
+
+- Authenticates a **source** Google account
+- Reads all subscribed YouTube channels from that account
+- Saves the subscriptions locally as a JSON backup
+- Authenticates a **target** Google account
+- Subscribes the target account to the same channels
+- Supports safe retry, resume, dry-run, and rate limiting
+
+> **Note**  
+> This tool is intended for **personal account migration only**. Use it responsibly and within YouTube API quota limits.
+
+Project structure
+-----------------
+
+The project is structured as follows:
+
+- `README.md`: this documentation
+- `requirements.txt`: Python dependencies
+- `.env.example`: example environment configuration
+- `main.py`: CLI entry point
+- `config.py`: configuration loading from environment variables and defaults
+- `auth.py`: OAuth login flow and token storage for source/target accounts
+- `youtube_client.py`: wrapper around YouTube Data API v3 calls
+- `exporter.py`: export source subscriptions to JSON
+- `migrator.py`: migration logic from JSON to target account
+- `state.py`: migration progress and resume state persistence
+- `logger.py`: structured logging setup
+- `utils.py`: helpers for retries, sleeps, and JSON I/O
+- `data/`: exported subscriptions, state, and summary reports
+- `tokens/`: OAuth token files per account
+- `logs/`: application log files
+
+Prerequisites
+-------------
+
+- Python **3.11+**
+- A Google account for the **source** YouTube channel
+- A Google account for the **target** YouTube channel
+- Ability to create and manage a project in Google Cloud Console
+
+Google Cloud project setup
+--------------------------
+
+1. **Create a Google Cloud project**
+
+   - Visit the Google Cloud Console (`https://console.cloud.google.com/`).
+   - Create a new project (or reuse an existing one).
+
+2. **Enable the YouTube Data API v3**
+
+   - In the Cloud Console, go to **APIs & Services → Library**.
+   - Search for **“YouTube Data API v3”**.
+   - Click **Enable** for your project.
+
+3. **Create OAuth client credentials (Desktop app)**
+
+   - Go to **APIs & Services → Credentials**.
+   - Click **Create Credentials → OAuth client ID**.
+   - If prompted, configure an **OAuth consent screen** (External), with app name and support email. You do not need to publish the app; testing mode is fine for personal use.
+   - Choose **Desktop app** as the application type.
+   - Download the resulting **JSON** file.
+
+4. **Place `credentials.json`**
+
+   - Save the downloaded file as `credentials.json` in the **project root** directory (this directory), or adjust the path using the `GOOGLE_API_CLIENT_SECRETS_FILE` environment variable.
+
+Environment configuration
+-------------------------
+
+1. Copy the example environment file:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` as needed:
+
+- `GOOGLE_API_CLIENT_SECRETS_FILE`: path to your OAuth client credentials JSON (default `credentials.json` in the project root).
+- `LOG_LEVEL`: logging level (`INFO`, `DEBUG`, etc.).
+- `DEFAULT_DELAY_SECONDS`: default delay between subscription write operations.
+- `MAX_DELAY_SECONDS`: maximum delay used by exponential backoff.
+- `MAX_RETRY_ATTEMPTS`: maximum retry attempts for retryable API errors.
+
+Installation
+------------
+
+1. Create and activate a virtual environment (recommended):
+
+   ```bash
+   python -m venv .venv
+   # Windows
+   .venv\Scripts\activate
+   # Linux/macOS
+   source .venv/bin/activate
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+CLI usage
+---------
+
+The main entrypoint is `main.py` in the project root. From the project root directory, run:
+
+- `python main.py <command> [options]`
+
+Available commands
+------------------
+
+### Authenticate accounts
+
+- **Authenticate source account** (read-only access for subscriptions):
+
+  ```bash
+  python main.py auth-source
+  ```
+
+- **Authenticate target account** (manage subscriptions):
+
+  ```bash
+  python main.py auth-target
+  ```
+
+- **Clear stored credentials** (optional, for troubleshooting or switching accounts):
+
+  ```bash
+  python main.py clear-auth --source --target
+  ```
+
+This will delete the cached tokens stored under `tokens/`.
+
+### Export subscriptions
+
+Export all subscriptions from the **source** account to a JSON file:
+
+```bash
+python main.py export-subscriptions --output data/source_subscriptions.json
+```
+
+The output file will look like:
+
+```json
+[
+  {
+    "channel_id": "UCxxxxxxxxxx",
+    "title": "Channel Name"
+  }
+]
+```
+
+If `--output` is omitted, a default path (configured by `DEFAULT_EXPORT_FILENAME`) in the `data/` directory will be used.
+
+### Migrate subscriptions
+
+Run a full migration from a JSON export to the **target** account:
+
+```bash
+python main.py migrate --input data/source_subscriptions.json --delay 3 --resume
+```
+
+Options:
+
+- `--input / -i`: path to the exported JSON file.
+- `--delay / -d`: delay in seconds between subscription **write operations** (default: from config).
+- `--resume / --no-resume`: whether to resume from an existing migration state file.
+- `--dry-run`: do everything except actually create subscriptions.
+- `--limit`: process at most N subscriptions in this run.
+- `--retry-failed-only`: process only channels recorded as failed in the migration state file.
+
+Examples:
+
+- **Dry run** (no actual subscriptions created):
+
+  ```bash
+  python main.py migrate --input data/source_subscriptions.json --dry-run
+  ```
+
+- **Migrate with delay and resume**:
+
+  ```bash
+  python main.py migrate --input data/source_subscriptions.json --delay 3 --resume
+  ```
+
+- **Limit number of processed subscriptions**:
+
+  ```bash
+  python main.py migrate --input data/source_subscriptions.json --limit 50
+  ```
+
+- **Retry only previously failed channels**:
+
+  ```bash
+  python main.py migrate --input data/source_subscriptions.json --retry-failed-only
+  ```
+
+Resume and state file
+---------------------
+
+Migration progress is stored in a JSON **state file**, by default:
+
+- `data/migration_state.json`
+
+The format is:
+
+```json
+{
+  "input_file": "data/source_subscriptions.json",
+  "processed": [
+    "UCxxxx1",
+    "UCxxxx2"
+  ],
+  "failed": [
+    {
+      "channel_id": "UCxxxx3",
+      "reason": "quotaExceeded"
+    }
+  ],
+  "last_updated": "ISO_TIMESTAMP"
+}
+```
+
+If the migration is interrupted or partially completes, re-running `migrate` with `--resume` will:
+
+- Skip already processed channels
+- Retain the list of failed channels
+- Continue from where it left off
+
+Dry-run mode
+------------
+
+With `--dry-run`, the tool:
+
+- Checks which channels the target account is already subscribed to
+- Logs which channels **would** be subscribed
+- Does **not** perform any `subscriptions.insert` calls
+- Updates the migration state as if they were successfully processed (for planning / what-if analysis)
+
+Logging
+-------
+
+Logging is configured to write to:
+
+- Console output
+- `logs/app.log` (rotating log files)
+
+Each log entry includes:
+
+- Timestamp
+- Log level
+- Logger name
+- Message
+
+During migration, key summary information is logged:
+
+- Total subscriptions found
+- Already subscribed on target
+- Newly subscribed
+- Failed
+- Skipped
+
+Final summary report
+--------------------
+
+After a migration run, a JSON **summary report** is written (by default):
+
+- `data/migration_summary.json`
+
+It includes:
+
+- `input_file`: path to the input subscriptions JSON
+- `total`: total number of entries in the input
+- `already_subscribed`: count already present on the target account
+- `newly_subscribed`: count successfully subscribed during this run
+- `failed`: count of failures
+- `skipped`: count of skipped entries (e.g., already processed or invalid)
+- `state_file`: path to the migration state file
+
+Status command
+--------------
+
+To inspect the current migration state:
+
+```bash
+python main.py status
+```
+
+This prints:
+
+- Input file path
+- Processed count
+- Failed count
+- Last updated timestamp
+
+Error handling
+--------------
+
+The tool attempts to handle and log:
+
+- Invalid or missing credentials
+- Expired tokens (refreshed automatically when possible)
+- `quotaExceeded` and `rateLimitExceeded`
+- `forbidden` / subscription-not-allowed errors
+- Other network/transient API failures (with retries)
+
+Failures for individual channels are:
+
+- Logged with a reason
+- Recorded in the `failed` array in the state file
+- Do **not** stop the entire migration
+
+Architecture overview
+---------------------
+
+- `config.py`: defines application configuration using environment variables and creates required directories.
+- `auth.py`: manages OAuth 2.0 installed-app flow for separate **source** and **target** accounts, storing tokens under `tokens/`.
+- `youtube_client.py`: wraps YouTube Data API v3 client (`subscriptions.list` and `subscriptions.insert`), and provides helpers:
+  - `list_all_subscriptions()`
+  - `is_already_subscribed(channel_id)`
+  - `subscribe_to_channel(channel_id)`
+- `exporter.py`: uses the source `YouTubeClient` to enumerate all subscriptions and save them to JSON.
+- `state.py`: maintains migration state and provides methods to load/save/mark processed/failed channels.
+- `migrator.py`: orchestrates reading from JSON, checking existing subscriptions, creating new ones with rate limiting, resume, limit, and retry-failed-only behaviors; writes a final summary report.
+- `logger.py`: central logging configuration for console and rotating file handlers.
+- `main.py`: Typer-based CLI that exposes commands:
+  - `auth-source`
+  - `auth-target`
+  - `clear-auth`
+  - `export-subscriptions`
+  - `migrate`
+  - `status`
+
+Limitations and quota notes
+---------------------------
+
+- This tool depends on YouTube Data API v3 quotas associated with your Google Cloud project.
+- Subscribing to a very large number of channels may consume significant quota or hit rate limits.
+- The `--delay` parameter and built-in exponential backoff reduce the risk of hitting short-term limits but cannot override daily quota caps.
+- Only personal accounts and standard YouTube channels are supported; brand accounts or restricted channels may behave differently.
+
+Troubleshooting
+---------------
+
+- **`FileNotFoundError` for credentials**  
+  Ensure your OAuth client JSON is accessible and `GOOGLE_API_CLIENT_SECRETS_FILE` points to the correct location.
+
+- **Browser does not open for OAuth**  
+  Copy and paste the URL from the terminal into a browser manually, then paste the authorization code if prompted.
+
+- **Quota or rate limit errors**  
+  Try increasing `--delay`, limiting the run with `--limit`, or retrying failed channels later with `--retry-failed-only`.
+
+- **Unexpected crashes**  
+  Check `logs/app.log` for stack traces and reasons. Since state is persisted, you can often safely re-run with `--resume`.
+
+Platform support
+----------------
+
+The project is designed to work on **Windows** and **Linux** (and should also work on macOS) as long as Python 3.11+ is available and the required packages can be installed.
+
