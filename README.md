@@ -44,31 +44,53 @@ Prerequisites
 - A Google account for the **target** YouTube channel
 - Ability to create and manage a project in Google Cloud Console
 
-Google Cloud project setup
---------------------------
+Google Cloud project and API setup
+----------------------------------
 
-1. **Create a Google Cloud project**
+1. **Create or select a Google Cloud project**
 
    - Visit the Google Cloud Console (`https://console.cloud.google.com/`).
-   - Create a new project (or reuse an existing one).
+   - If you don’t already have a project for this tool, create a new one.
 
 2. **Enable the YouTube Data API v3**
 
    - In the Cloud Console, go to **APIs & Services → Library**.
    - Search for **“YouTube Data API v3”**.
-   - Click **Enable** for your project.
+   - Open it and click **Enable** for your project.
 
-3. **Create OAuth client credentials (Desktop app)**
+3. **Configure the OAuth consent screen (one-time)**
+
+   - Go to **APIs & Services → OAuth consent screen**.
+   - Click **Get started** (if you haven’t configured it yet).
+   - **User type / Audience**: choose **External**.
+   - Fill in **App information** (e.g., app name and support email).
+   - Add your email as a test user if prompted.
+   - Click through to **Finish**. You do **not** need to publish the app; testing mode is sufficient for personal use.
+
+4. **Create OAuth client credentials (Desktop app)**
 
    - Go to **APIs & Services → Credentials**.
    - Click **Create Credentials → OAuth client ID**.
-   - If prompted, configure an **OAuth consent screen** (External), with app name and support email. You do not need to publish the app; testing mode is fine for personal use.
-   - Choose **Desktop app** as the application type.
-   - Download the resulting **JSON** file.
+   - For **Application type**, choose **Desktop app**.
+   - Click **Create**. Google will show:
+     - **Client ID**
+     - **Client secret**
+     - A **Download JSON** button
+   - Click **Download JSON** and save the file directly (do not create or edit it manually).
 
-4. **Place `credentials.json`**
+5. **Place `credentials.json`**
 
-   - Save the downloaded file as `credentials.json` in the **project root** directory (this directory), or adjust the path using the `GOOGLE_API_CLIENT_SECRETS_FILE` environment variable.
+   - Save the downloaded JSON file as `credentials.json` in the **project root** directory (this directory), or adjust the path using the `GOOGLE_API_CLIENT_SECRETS_FILE` environment variable.
+   - Confirm the file is valid JSON by opening it in a text editor: it should start with something like:
+
+     ```json
+     {
+       "installed": {
+         ...
+     }
+     ```
+
+     and must not be empty or contain HTML or error text.
 
 Environment configuration
 -------------------------
@@ -109,9 +131,40 @@ Installation
 CLI usage
 ---------
 
-The main entrypoint is `main.py` in the project root. From the project root directory, run:
+The main entrypoint is `main.py` in the project root.
 
-- `python main.py <command> [options]`
+### Interactive mode (menu)
+
+If you simply run:
+
+```bash
+python main.py
+```
+
+you will enter an interactive text menu with options such as:
+
+- `1` – Authenticate **source** account
+- `2` – Authenticate **target** account
+- `3` – Export subscriptions from source account
+- `4` – Migrate subscriptions to target account
+- `5` – Show migration status
+- `0` – Exit
+
+This is the easiest way to step through authentication and migration without remembering individual commands.
+
+Before using the interactive menu for the first time, make sure you have:
+
+- Enabled **YouTube Data API v3** for your Google Cloud project.
+- Downloaded the **Desktop app OAuth client JSON** from the Google Cloud Console.
+- Placed it as `credentials.json` in the project root (or configured `GOOGLE_API_CLIENT_SECRETS_FILE` accordingly).
+
+### Direct command usage
+
+You can also run individual commands directly:
+
+```bash
+python main.py <command> [options]
+```
 
 Available commands
 ------------------
@@ -351,6 +404,9 @@ Troubleshooting
 
 - **`FileNotFoundError` for credentials**  
   Ensure your OAuth client JSON is accessible and `GOOGLE_API_CLIENT_SECRETS_FILE` points to the correct location.
+
+- **`Expecting value: line 1 column 1 (char 0)` or similar JSON errors when authenticating**  
+  Your `credentials.json` file is empty or not valid JSON. Re-download the OAuth **Desktop app** client JSON from the Google Cloud Console and save it directly to the project root as `credentials.json` (do not create or edit it manually).
 
 - **Browser does not open for OAuth**  
   Copy and paste the URL from the terminal into a browser manually, then paste the authorization code if prompted.
