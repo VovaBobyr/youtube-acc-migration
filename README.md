@@ -158,6 +158,58 @@ Before using the interactive menu for the first time, make sure you have:
 - Downloaded the **Desktop app OAuth client JSON** from the Google Cloud Console.
 - Placed it as `credentials.json` in the project root (or configured `GOOGLE_API_CLIENT_SECRETS_FILE` accordingly).
 
+#### Quick start: default interactive scenario
+
+From a fresh setup, the typical flow is to run the menu and then select options **1 → 2 → 3 → 4** in order:
+
+1. **Start the menu**
+
+   ```bash
+   python main.py
+   ```
+
+2. **Option 1 – Authenticate SOURCE account**
+
+   - In the menu, enter `1`.
+   - When the browser opens, sign in with your **source** YouTube/Google account.
+   - When this succeeds once, the tool saves a source token file and you usually do not need to repeat this step.
+
+3. **Option 2 – Authenticate TARGET account**
+
+   - In the menu, enter `2`.
+   - When the browser opens, sign in with your **target** YouTube/Google account (use “Use another account” if needed).
+   - When this succeeds once, the tool saves a target token file and you usually do not need to repeat this step.
+
+4. **Option 3 – Export subscriptions from SOURCE**
+
+   - In the menu, enter `3`.
+   - When prompted for the output path, you can normally accept the default:
+
+     ```text
+     data/source_subscriptions.json
+     ```
+
+   - This creates a JSON backup of all channels from the source account.
+
+5. **Option 4 – Migrate subscriptions to TARGET (actual migration run)**
+
+   - In the menu, enter `4`.
+   - When prompted:
+     - **Input JSON path for subscriptions**: press Enter to accept the default `data/source_subscriptions.json` (if you used option 3).
+     - **Delay between operations in seconds**: choose a small positive value such as `2` to be gentle with rate limits.
+     - **Resume from previous migration state if present?**: usually answer **Yes** (`y`) so you can safely restart if something interrupts the run.
+     - **Dry run only (no actual subscriptions created)?**:
+       - For a test run, answer **Yes** to see what would happen without changing the target account.
+       - For a **real migration**, answer **No** so the tool actually subscribes the target account to each channel.
+     - **Retry only previously failed channels?**:
+       - On the **first** full run, answer **No** so all channels are processed.
+       - Later, you can answer **Yes** if you only want to retry channels that failed in an earlier run.
+     - **Limit number of subscriptions to process (blank for no limit)**:
+       - Press Enter to migrate **all** channels.
+       - Or provide a number (for example `50`) to process only that many in this run.
+
+   - After you answer these questions, the migration will start. Watch the console and `logs/app.log` for progress; a summary JSON is written to `data/migration_summary.json`.
+
 ### Direct command usage
 
 You can also run individual commands directly:
