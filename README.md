@@ -12,6 +12,7 @@ The tool:
 - Subscribes the target account to the same channels
 - Supports safe retry, resume, dry-run, and rate limiting
 
+
 > **Note**  
 > This tool is intended for **personal account migration only**. Use it responsibly and within YouTube API quota limits.
 
