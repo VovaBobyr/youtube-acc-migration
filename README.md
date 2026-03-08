@@ -7,11 +7,11 @@ This is a Python 3.11+ CLI tool for migrating YouTube channel subscriptions from
 
 For a **visual step-by-step setup guide**, see:
 
-👉 **[Setup Slides](docs/setup-slides.html)**
+👉 [Setup Slides](https://vovabobyr.github.io/youtube-acc-migration/)
 
 Click the image below to open the setup slides.
 
-[![Setup Guide](docs/images/Slide01.png)](docs/setup-slides.html)
+[![Setup Guide](docs/images/Slide01.png)](https://vovabobyr.github.io/youtube-acc-migration/)
 
 The tool:
 
