@@ -3,6 +3,12 @@ tokens/
 logs/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.log
 .env
 .venv/
+dist/
+build/
 
+tokens/*.json
