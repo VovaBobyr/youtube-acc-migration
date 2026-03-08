@@ -3,6 +3,12 @@ YouTube Subscription Migrator
 
 This is a Python 3.11+ CLI tool for migrating YouTube channel subscriptions from one personal Google account to another using the official YouTube Data API v3.
 
+## 📊 Quick Setup Slides
+
+For a **visual step-by-step setup guide**, see:
+
+👉 **[Setup Slides](docs/setup-slides.md)**
+
 The tool:
 
 - Authenticates a **source** Google account
